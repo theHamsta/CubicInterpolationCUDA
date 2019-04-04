@@ -32,8 +32,8 @@ policies, either expressed or implied.
 
 When using this code in a scientific project, please cite one or all of the
 following papers:
-*  Daniel Ruijters and Philippe Thévenaz,
-   GPU Prefilter for Accurate Cubic B-Spline Interpolation, 
+*  Daniel Ruijters and Philippe ThÃ©venaz,
+   GPU Prefilter for Accurate Cubic B-Spline Interpolation,
    The Computer Journal, vol. 55, no. 1, pp. 15-20, January 2012.
    http://dannyruijters.nl/docs/cudaPrefilter3.pdf
 *  Daniel Ruijters, Bart M. ter Haar Romeny, and Paul Suetens,
@@ -44,39 +44,45 @@ following papers:
 #ifndef _2D_CUBIC_BSPLINE_PREFILTER_H_
 #define _2D_CUBIC_BSPLINE_PREFILTER_H_
 
-#include <stdio.h>
-#include <cutil.h>
+extern "C++" {
+static inline void CUT_CHECK_ERROR(const char* errorMessage)
+{
+	cudaError_t err = cudaGetLastError();
+    if (cudaSuccess != err)
+	{
+        fprintf(stderr, "Cuda error: %s: %s.\n", errorMessage, cudaGetErrorString(err) );
+    }
+}
 #include "internal/cubicPrefilter_kernel.cu"
+#include <stdio.h>
 
 // ***************************************************************************
 // *	Global GPU procedures
 // ***************************************************************************
-template<class floatN>
-__global__ void SamplesToCoefficients2DX(
-	floatN* image,		// in-place processing
-	uint pitch,			// width in bytes
-	uint width,			// width of the image
-	uint height)		// height of the image
+template <class floatN>
+__global__ void SamplesToCoefficients2DX(floatN *image, // in-place processing
+                                         uint pitch,    // width in bytes
+                                         uint width,    // width of the image
+                                         uint height)   // height of the image
 {
-	// process lines in x-direction
-	const uint y = blockIdx.x * blockDim.x + threadIdx.x;
-	floatN* line = (floatN*)((uchar*)image + y * pitch);  //direct access
+  // process lines in x-direction
+  const uint y = blockIdx.x * blockDim.x + threadIdx.x;
+  floatN *line = (floatN *)((uchar *)image + y * pitch); // direct access
 
-	ConvertToInterpolationCoefficients(line, width, sizeof(floatN));
+  ConvertToInterpolationCoefficients(line, width, sizeof(floatN));
 }
 
-template<class floatN>
-__global__ void SamplesToCoefficients2DY(
-	floatN* image,		// in-place processing
-	uint pitch,			// width in bytes
-	uint width,			// width of the image
-	uint height)		// height of the image
+template <class floatN>
+__global__ void SamplesToCoefficients2DY(floatN *image, // in-place processing
+                                         uint pitch,    // width in bytes
+                                         uint width,    // width of the image
+                                         uint height)   // height of the image
 {
-	// process lines in x-direction
-	const uint x = blockIdx.x * blockDim.x + threadIdx.x;
-	floatN* line = image + x;  //direct access
+  // process lines in x-direction
+  const uint x = blockIdx.x * blockDim.x + threadIdx.x;
+  floatN *line = image + x; // direct access
 
-	ConvertToInterpolationCoefficients(line, height, pitch);
+  ConvertToInterpolationCoefficients(line, height, pitch);
 }
 
 // ***************************************************************************
@@ -88,18 +94,20 @@ __global__ void SamplesToCoefficients2DY(
 //! @param pitch   width in bytes (including padding bytes)
 //! @param width   image width in number of pixels
 //! @param height  image height in number of pixels
-template<class floatN>
-extern void CubicBSplinePrefilter2D(floatN* image, uint pitch, uint width, uint height)
-{
-	dim3 dimBlockX(min(PowTwoDivider(height), 64));
-	dim3 dimGridX(height / dimBlockX.x);
-	SamplesToCoefficients2DX<floatN><<<dimGridX, dimBlockX>>>(image, pitch, width, height);
-	CUT_CHECK_ERROR("SamplesToCoefficients2DX kernel failed");
+template <class floatN>
+void CubicBSplinePrefilter2D(floatN *image, uint pitch, uint width,
+                                    uint height) {
+  dim3 dimBlockX(min(PowTwoDivider(height), 64));
+  dim3 dimGridX(height / dimBlockX.x);
+  SamplesToCoefficients2DX<floatN>
+      <<<dimGridX, dimBlockX>>>(image, pitch, width, height);
+  CUT_CHECK_ERROR("SamplesToCoefficients2DX kernel failed");
 
-	dim3 dimBlockY(min(PowTwoDivider(width), 64));
-	dim3 dimGridY(width / dimBlockY.x);
-	SamplesToCoefficients2DY<floatN><<<dimGridY, dimBlockY>>>(image, pitch, width, height);
-	CUT_CHECK_ERROR("SamplesToCoefficients2DY kernel failed");
+  dim3 dimBlockY(min(PowTwoDivider(width), 64));
+  dim3 dimGridY(width / dimBlockY.x);
+  SamplesToCoefficients2DY<floatN>
+      <<<dimGridY, dimBlockY>>>(image, pitch, width, height);
+  CUT_CHECK_ERROR("SamplesToCoefficients2DY kernel failed");
 }
 
 //! Convert the pixel values into cubic b-spline coefficients
@@ -108,35 +116,63 @@ extern void CubicBSplinePrefilter2D(floatN* image, uint pitch, uint width, uint 
 //! @param width   image width in number of pixels
 //! @param height  image height in number of pixels
 //! @note Prints stopwatch feedback
-template<class floatN>
-extern void CubicBSplinePrefilter2DTimer(floatN* image, uint pitch, uint width, uint height)
-{
-	printf("\nCubic B-Spline Prefilter timer:\n");
-	unsigned int hTimer;
-	CUT_SAFE_CALL(cutCreateTimer(&hTimer));
-	CUT_SAFE_CALL(cutResetTimer(hTimer));
-	CUT_SAFE_CALL(cutStartTimer(hTimer));
+template <class floatN>
+void CubicBSplinePrefilter2DTimer(floatN *image, uint pitch, uint width,
+                                         uint height) {
+  printf("\nCubic B-Spline Prefilter timer:\n");
+  unsigned int hTimer;
+  CUT_SAFE_CALL(cutCreateTimer(&hTimer));
+  CUT_SAFE_CALL(cutResetTimer(hTimer));
+  CUT_SAFE_CALL(cutStartTimer(hTimer));
 
-	dim3 dimBlockX(min(PowTwoDivider(height), 64));
-	dim3 dimGridX(height / dimBlockX.x);
-	SamplesToCoefficients2DX<floatN><<<dimGridX, dimBlockX>>>(image, pitch, width, height);
-	CUT_CHECK_ERROR("SamplesToCoefficients2DX kernel failed");
+  dim3 dimBlockX(min(PowTwoDivider(height), 64));
+  dim3 dimGridX(height / dimBlockX.x);
+  SamplesToCoefficients2DX<floatN>
+      <<<dimGridX, dimBlockX>>>(image, pitch, width, height);
+  CUT_CHECK_ERROR("SamplesToCoefficients2DX kernel failed");
 
-	CUT_SAFE_CALL(cutStopTimer(hTimer));
-	double timerValueX = cutGetTimerValue(hTimer);
-	printf("x-direction : %f msec\n", timerValueX);
-	CUT_SAFE_CALL(cutResetTimer(hTimer));
-	CUT_SAFE_CALL(cutStartTimer(hTimer));
+  CUT_SAFE_CALL(cutStopTimer(hTimer));
+  double timerValueX = cutGetTimerValue(hTimer);
+  printf("x-direction : %f msec\n", timerValueX);
+  CUT_SAFE_CALL(cutResetTimer(hTimer));
+  CUT_SAFE_CALL(cutStartTimer(hTimer));
 
-	dim3 dimBlockY(min(PowTwoDivider(width), 64));
-	dim3 dimGridY(width / dimBlockY.x);
-	SamplesToCoefficients2DY<floatN><<<dimGridY, dimBlockY>>>(image, pitch, width, height);
-	CUT_CHECK_ERROR("SamplesToCoefficients2DY kernel failed");
+  dim3 dimBlockY(min(PowTwoDivider(width), 64));
+  dim3 dimGridY(width / dimBlockY.x);
+  SamplesToCoefficients2DY<floatN>
+      <<<dimGridY, dimBlockY>>>(image, pitch, width, height);
+  CUT_CHECK_ERROR("SamplesToCoefficients2DY kernel failed");
 
-	CUT_SAFE_CALL(cutStopTimer(hTimer));
-	double timerValueY = cutGetTimerValue(hTimer);
-	printf("y-direction : %f msec\n", timerValueY);
-	printf("total : %f msec\n\n", timerValueX+timerValueY);
+  CUT_SAFE_CALL(cutStopTimer(hTimer));
+  double timerValueY = cutGetTimerValue(hTimer);
+  printf("y-direction : %f msec\n", timerValueY);
+  printf("total : %f msec\n\n", timerValueX + timerValueY);
+}
 }
 
-#endif  //_2D_CUBIC_BSPLINE_PREFILTER_H_
+using floatN = float;
+__global__ void SamplesToCoefficients2DXf(floatN *image, // in-place processing
+                                         uint pitch,    // width in bytes
+                                         uint width,    // width of the image
+                                         uint height)   // height of the image
+{
+  // process lines in x-direction
+  const uint y = blockIdx.x * blockDim.x + threadIdx.x;
+  floatN *line = (floatN *)((uchar *)image + y * pitch); // direct access
+
+  ConvertToInterpolationCoefficients(line, width, sizeof(floatN));
+}
+
+__global__ void SamplesToCoefficients2DYf(floatN *image, // in-place processing
+                                         uint pitch,    // width in bytes
+                                         uint width,    // width of the image
+                                         uint height)   // height of the image
+{
+  // process lines in x-direction
+  const uint x = blockIdx.x * blockDim.x + threadIdx.x;
+  floatN *line = image + x; // direct access
+
+  ConvertToInterpolationCoefficients(line, height, pitch);
+}
+
+#endif //_2D_CUBIC_BSPLINE_PREFILTER_H_
