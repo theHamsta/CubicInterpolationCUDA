@@ -56,6 +56,12 @@ __device__ float linearTex3D(texture<T, 3, mode> tex, float3 coord)
 	return tex3D(tex, coord.x, coord.y, coord.z);
 }
 
+template<class T, enum cudaTextureReadMode mode>
+__device__ float cubicTex3DSimple(texture<T, 3, mode> tex, float x, float y, float z)
+{
+	return cubicTex3DSimple(tex, {x, y, z});
+}
+
 //! Tricubic interpolated texture lookup, using unnormalized coordinates.
 //! Straight forward implementation, using 64 nearest neighbour lookups.
 //! @param tex  3D texture
