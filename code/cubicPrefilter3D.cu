@@ -206,8 +206,51 @@ void prefilter3D(float *image, uint pitch, uint width, uint height,
   CubicBSplinePrefilter3D<float>(image, pitch, width, height, depth);
 };
 
-auto SamplesToCoefficients3DXf = SamplesToCoefficients3DX<float>;
-auto SamplesToCoefficients3DYf = SamplesToCoefficients3DY<float>;
-auto SamplesToCoefficients3DZf = SamplesToCoefficients3DZ<float>;
+using floatN = float;
+__global__ void SamplesToCoefficients3DXf(floatN *volume, // in-place processing
+                                         uint pitch,     // width in bytes
+                                         uint width,     // width of the volume
+                                         uint height,    // height of the volume
+                                         uint depth)     // depth of the volume
+{
+  // process lines in x-direction
+  const uint y = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint z = blockIdx.y * blockDim.y + threadIdx.y;
+  const uint startIdx = (z * height + y) * pitch;
+
+  floatN *ptr = (floatN *)((uchar *)volume + startIdx);
+  ConvertToInterpolationCoefficients(ptr, width, sizeof(floatN));
+}
+
+__global__ void SamplesToCoefficients3DYf(floatN *volume, // in-place processing
+                                         uint pitch,     // width in bytes
+                                         uint width,     // width of the volume
+                                         uint height,    // height of the volume
+                                         uint depth)     // depth of the volume
+{
+  // process lines in y-direction
+  const uint x = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint z = blockIdx.y * blockDim.y + threadIdx.y;
+  const uint startIdx = z * height * pitch;
+
+  floatN *ptr = (floatN *)((uchar *)volume + startIdx);
+  ConvertToInterpolationCoefficients(ptr + x, height, pitch);
+}
+
+__global__ void SamplesToCoefficients3DZf(floatN *volume, // in-place processing
+                                         uint pitch,     // width in bytes
+                                         uint width,     // width of the volume
+                                         uint height,    // height of the volume
+                                         uint depth)     // depth of the volume
+{
+  // process lines in z-direction
+  const uint x = blockIdx.x * blockDim.x + threadIdx.x;
+  const uint y = blockIdx.y * blockDim.y + threadIdx.y;
+  const uint startIdx = y * pitch;
+  const uint slice = height * pitch;
+
+  floatN *ptr = (floatN *)((uchar *)volume + startIdx);
+  ConvertToInterpolationCoefficients(ptr + x, depth, slice);
+}
 
 #endif //_3D_CUBIC_BSPLINE_PREFILTER_H_
